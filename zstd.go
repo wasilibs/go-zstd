@@ -17,7 +17,15 @@ import (
 	"github.com/wasilibs/go-zstd/internal/wasmabi"
 )
 
-const DefaultCompression = 5
+// Defines best and standard values for zstd cli
+const (
+	BestSpeed          = 1
+	BestCompression    = 20
+	DefaultCompression = 5
+)
+
+// ErrEmptySlice is returned when there is nothing to compress
+var ErrEmptySlice = errors.New("Bytes slice is empty")
 
 const (
 	// decompressSizeBufferLimit is the limit we set on creating a decompression buffer for the Decompress API
@@ -187,6 +195,10 @@ func cCompressBound(srcSize int) int {
 // prevent allocation.  If it is too small, or if nil is passed, a new buffer
 // will be allocated and returned.
 func Decompress(dst, src []byte) ([]byte, error) {
+	if len(src) == 0 {
+		return nil, ErrEmptySlice
+	}
+
 	ctx := context.Background()
 
 	abi := abiPool.Get().(*libzstdABI)
@@ -221,7 +233,7 @@ func Decompress(dst, src []byte) ([]byte, error) {
 		panic(err)
 	}
 
-	written := int(callStack[0])
+	written := int32(callStack[0])
 	if err := zstdError(abi, written); err != nil {
 		return nil, err
 	}
@@ -273,7 +285,7 @@ func decompressSizeHint(ctx context.Context, abi *libzstdABI, srcWasm uint32, sr
 	return hint
 }
 
-func zstdError(abi *libzstdABI, code int) error {
+func zstdError(abi *libzstdABI, code int32) error {
 	if code >= 0 {
 		return nil
 	}

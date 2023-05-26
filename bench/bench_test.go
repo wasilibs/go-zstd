@@ -1,12 +1,13 @@
 package bench
 
 import (
-	"github.com/wasilibs/go-zstd"
 	"os"
 	"path/filepath"
 	"testing"
 
 	ddzstd "github.com/DataDog/zstd"
+
+	"github.com/wasilibs/go-zstd"
 )
 
 var benches = []string{
