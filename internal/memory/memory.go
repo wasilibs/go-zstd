@@ -3,7 +3,9 @@ package memory
 import (
 	"context"
 	"errors"
+
 	"github.com/tetratelabs/wazero/api"
+
 	"github.com/wasilibs/go-zstd/internal/wasmabi"
 )
 

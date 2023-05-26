@@ -5,13 +5,16 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"runtime"
+	"strings"
+	"sync"
+
 	"github.com/tetratelabs/wazero"
 	"github.com/tetratelabs/wazero/api"
 	"github.com/tetratelabs/wazero/imports/wasi_snapshot_preview1"
+
 	"github.com/wasilibs/go-zstd/internal/memory"
 	"github.com/wasilibs/go-zstd/internal/wasmabi"
-	"runtime"
-	"sync"
 )
 
 const DefaultCompression = 5
@@ -58,6 +61,8 @@ type libzstdABI struct {
 	zstdCompressBound       api.Function
 	zstdGetFrameContentSize api.Function
 	zstdDecompress          api.Function
+	zstdIsError             api.Function
+	zstdGetErrorName        api.Function
 }
 
 func newABI() *libzstdABI {
@@ -81,6 +86,8 @@ func newABI() *libzstdABI {
 		zstdCompressBound:       mod.ExportedFunction("ZSTD_compressBound"),
 		zstdGetFrameContentSize: mod.ExportedFunction("ZSTD_getFrameContentSize"),
 		zstdDecompress:          mod.ExportedFunction("ZSTD_decompress"),
+		zstdIsError:             mod.ExportedFunction("ZSTD_isError"),
+		zstdGetErrorName:        mod.ExportedFunction("ZSTD_getErrorName"),
 	}
 
 	runtime.SetFinalizer(abi, func(abi *libzstdABI) {
@@ -215,8 +222,13 @@ func Decompress(dst, src []byte) ([]byte, error) {
 	}
 
 	written := int(callStack[0])
-	if written < 0 {
-		return nil, errors.New("zstd: decompress failed")
+	if err := zstdError(abi, written); err != nil {
+		return nil, err
+	}
+
+	if err := zstdError(abi, written); err != nil {
+		// TODO: Fallback to streaming API
+		return nil, err
 	}
 
 	dstWasmBuf, ok := abi.Memory.Read(uint32(dstWasm), uint32(len(dst)))
@@ -259,4 +271,43 @@ func decompressSizeHint(ctx context.Context, abi *libzstdABI, srcWasm uint32, sr
 		return upperBound
 	}
 	return hint
+}
+
+func zstdError(abi *libzstdABI, code int) error {
+	if code >= 0 {
+		return nil
+	}
+
+	ctx := context.Background()
+	callStack := abi.CallStack
+
+	callStack[0] = uint64(code)
+
+	if err := abi.zstdIsError.CallWithStack(ctx, callStack); err != nil {
+		panic(err)
+	}
+	if callStack[0] == 0 {
+		return nil
+	}
+
+	callStack[0] = uint64(code)
+	if err := abi.zstdGetErrorName.CallWithStack(ctx, callStack); err != nil {
+		panic(err)
+	}
+
+	// TODO: Cache
+	errorCStrPtr := uint32(callStack[0])
+	errStr := strings.Builder{}
+	for {
+		c, ok := abi.Memory.ReadByte(errorCStrPtr)
+		if !ok {
+			panic(errFailedRead)
+		}
+		if c == 0 {
+			break
+		}
+		errStr.WriteByte(c)
+		errorCStrPtr++
+	}
+	return errors.New(errStr.String())
 }

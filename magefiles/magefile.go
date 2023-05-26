@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/magefile/mage/sh"
 	"os"
 	"path/filepath"
+
+	"github.com/magefile/mage/mg"
+	"github.com/magefile/mage/sh"
 )
 
 // UpdateLibs updates the precompiled wasm libraries.
@@ -17,4 +19,35 @@ func UpdateLibs() error {
 		return err
 	}
 	return sh.RunV("docker", "run", "-it", "--rm", "-v", fmt.Sprintf("%s:/out", filepath.Join(wd, "internal", "wasm")), "wasmbuild")
+}
+
+func Format() error {
+	if err := sh.RunV("go", "run", fmt.Sprintf("mvdan.cc/gofumpt@%s", verGoFumpt), "-l", "-w", "."); err != nil {
+		return err
+	}
+	if err := sh.RunV("go", "run", fmt.Sprintf("github.com/rinchsan/gosimports/cmd/gosimports@%s", verGosImports), "-w",
+		"-local", "github.com/wasilibs/go-zstd",
+		"."); err != nil {
+		return nil
+	}
+	return nil
+}
+
+func Lint() error {
+	return sh.RunV("go", "run", fmt.Sprintf("github.com/golangci/golangci-lint/cmd/golangci-lint@%s", verGolangCILint), "run", "--timeout", "5m")
+}
+
+// Test runs unit tests
+func Test() error {
+	return sh.RunV("go", "test", "-v", "-timeout=20m", "./...")
+}
+
+// Check runs lint and tests.
+func Check() {
+	mg.SerialDeps(Lint, Test)
+}
+
+// Bench runs benchmarks.
+func Bench() error {
+	return sh.RunV("go", "test", "-bench=.", "-run=^$", "-timeout=60m", "./bench")
 }

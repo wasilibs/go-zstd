@@ -7,6 +7,8 @@ ENV LDFLAGS  ${LDFLAGS} -Wl,--global-base=1024 -mexec-model=reactor \
   -Wl,--export=ZSTD_decompress \
   -Wl,--export=ZSTD_compressBound \
   -Wl,--export=ZSTD_getFrameContentSize \
+  -Wl,--export=ZSTD_getErrorName \
+  -Wl,--export=ZSTD_isError \
   -Wl,--export=malloc \
   -Wl,--export=free
 
