@@ -49,5 +49,11 @@ func Check() {
 
 // Bench runs benchmarks.
 func Bench() error {
+	if _, err := os.Stat(filepath.Join("bench", "silesia", "dickens")); err != nil {
+		fmt.Println("Downloading benchmark corpus, this may take some time")
+		if err := sh.RunV("git", "submodule", "update", "--init"); err != nil {
+			return err
+		}
+	}
 	return sh.RunV("go", "test", "-bench=.", "-run=^$", "-timeout=60m", "./bench")
 }
