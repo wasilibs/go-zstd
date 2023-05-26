@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	ddzstd "github.com/DataDog/zstd"
+	kpzstd "github.com/klauspost/compress/zstd"
 
 	"github.com/wasilibs/go-zstd"
 )
@@ -25,9 +26,11 @@ var benches = []string{
 }
 
 func BenchmarkCompress(b *testing.B) {
+	kpEncoder, _ := kpzstd.NewWriter(nil)
+
 	modes := []struct {
 		name string
-		fn   func([]byte, []byte) ([]byte, error)
+		fn   func(dst, src []byte) ([]byte, error)
 	}{
 		{
 			name: "wasilibs",
@@ -36,6 +39,12 @@ func BenchmarkCompress(b *testing.B) {
 		{
 			name: "datadog",
 			fn:   ddzstd.Compress,
+		},
+		{
+			name: "klauspost",
+			fn: func(dst, src []byte) ([]byte, error) {
+				return kpEncoder.EncodeAll(src, dst), nil
+			},
 		},
 	}
 
@@ -65,9 +74,11 @@ func BenchmarkCompress(b *testing.B) {
 }
 
 func BenchmarkDecompress(b *testing.B) {
+	kpDecoder, _ := kpzstd.NewReader(nil)
+
 	modes := []struct {
 		name string
-		fn   func([]byte, []byte) ([]byte, error)
+		fn   func(dst, src []byte) ([]byte, error)
 	}{
 		{
 			name: "wasilibs",
@@ -76,6 +87,12 @@ func BenchmarkDecompress(b *testing.B) {
 		{
 			name: "datadog",
 			fn:   ddzstd.Decompress,
+		},
+		{
+			name: "klauspost",
+			fn: func(dst, src []byte) ([]byte, error) {
+				return kpDecoder.DecodeAll(src, dst)
+			},
 		},
 	}
 
